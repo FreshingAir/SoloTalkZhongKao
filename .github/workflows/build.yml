@@ -1,0 +1,145 @@
+name: Windows Build (Nuitka + Inno)
+
+# 触发方式：
+#  - 手动运行（Actions → 本工作流 → Run workflow）
+#  - 推送到 main 分支
+#  - 推送 v* 标签（如 v0.5 即将发布，会额外创建 GitHub Release）
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+
+permissions:
+  contents: write   # 允许创建 GitHub Release
+
+jobs:
+  build-windows:
+    name: Build Windows installer
+    runs-on: windows-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      # Nuitka 会把编译缓存放在一起，缓存在 runner 之间复用，避免每次全量编译 C 代码
+      - name: Nuitka cache dir
+        shell: pwsh
+        run: |
+          'NUITKA_CACHE_DIR=$env:LOCALAPPDATA\Nuitka' >> $env:GITHUB_ENV
+
+      - name: Cache Nuitka build cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.NUITKA_CACHE_DIR }}
+          key: nuitka-${{ runner.os }}-py${{ env.pythonLocation }}
+
+      - name: Install Inno Setup (for installer)
+        shell: pwsh
+        run: choco install -y --no-progress innosetup
+
+      - name: Install Python build & runtime deps
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade nuitka ordered-set zstandard imageio
+          python -m pip install PyQt5 pyttsx3 sounddevice vosk pygame numpy scipy edge-tts
+
+      # 入口文件名可能为中文（如“SoloTalk…测试版_v0.5..py”），统一复制为干净的 main.py
+      - name: Ensure clean main.py entry
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'main.py')) {
+            $src = Get-ChildItem -Path . -Filter 'SoloTalk*.py' | Select-Object -First 1
+            if (-not $src) { throw 'No SoloTalk*.py entry file found in repo.' }
+            Copy-Item $src.FullName 'main.py'
+          }
+          Write-Host "Using entry: $((Resolve-Path 'main.py').Path)"
+
+      # vosk 模型（约 40MB）不进仓库，构建时从官方源下载并解压，让应用自带语音自动评测
+      - name: Download & extract Vosk English model
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri 'https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip' -OutFile 'vosk.zip' -UseBasicParsing
+          Expand-Archive -Path 'vosk.zip' -DestinationPath . -Force
+          Remove-Item 'vosk.zip'
+          $mdl = 'vosk-model-small-en-us-0.15\am\final.mdl'
+          if (-not (Test-Path $mdl)) { throw "Vosk model not extracted: $mdl" }
+          Write-Host "[OK] Vosk model ready."
+
+      - name: Verify build script files exist
+        shell: pwsh
+        run: |
+          foreach ($f in 'installer.iss') {
+            if (-not (Test-Path $f)) { throw "Missing required file: $f" }
+          }
+
+      # 与本地 build_nuitka.bat 的参数保持一致，并在此基础上强制使用 MSVC 工具链
+      - name: Compile with Nuitka (standalone, MSVC)
+        shell: pwsh
+        run: |
+          $flags = @(
+            '--standalone',
+            '--enable-plugin=pyqt5',
+            '--msvc=latest',              # 明确使用 Windows 运行器上预装的 MSVC，禁用其它工具链
+            '--windows-console-mode=disable',
+            '--output-dir=build',
+            '--include-package=vosk',
+            '--include-package=pygame',
+            '--include-package=sounddevice',
+            '--include-package=edge_tts',
+            '--include-package-data=edge_tts',
+            '--include-package=scipy',
+            '--include-package=numpy',
+            '--include-data-dir=vosk-model-small-en-us-0.15=vosk-model-small-en-us-0.15',
+            '--output-filename=SoloTalkZhongKao.exe',
+            'main.py'
+          )
+          python -m nuitka @flags
+          if (-not (Test-Path 'build\main.dist\SoloTalkZhongKao.exe')) {
+            throw 'Nuitka did not produce build\main.dist\SoloTalkZhongKao.exe'
+          }
+          Write-Host "[OK] Exe built."
+
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = @(
+            'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
+            'C:\Program Files (x86)\Inno Setup 7\ISCC.exe'
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) { throw 'ISCC.exe not found after choco install.' }
+          & $iscc 'installer.iss'
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup failed.' }
+          $setup = Get-ChildItem 'installer\*.exe' -ErrorAction Stop | Select-Object -First 1
+          Write-Host "[OK] Installer: $($setup.FullName)"
+
+      - name: Upload portable app folder (portable zip)
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoloTalk-portable
+          path: build/main.dist
+          if-no-files-found: error
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoloTalk-installer
+          path: installer/*.exe
+          if-no-files-found: error
+
+      # 仅在推送 v* 标签时，把安装包作为 GitHub Release 资产发布
+      - name: Create GitHub Release (tag only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            installer/*.exe
+          draft: true
