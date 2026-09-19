@@ -213,14 +213,19 @@ jobs:
       - name: Build with PyInstaller (onedir)
         shell: pwsh
         run: |
+          # sounddevice 是单文件模块，--collect-all 收集不到它的 PortAudio DLL；
+          # 手动定位 wheel 内 libportaudio*.dll，并放进运行期查找路径 sounddevice/_sounddevice_data/portaudio-binaries
+          $paDll = python -c "import glob,os,sounddevice; p=os.path.join(os.path.dirname(sounddevice.__file__),'_sounddevice_data','portaudio-binaries'); print(glob.glob(os.path.join(p,'libportaudio*.dll'))[0])"
+          if (-not $paDll) { throw 'PortAudio DLL not found in sounddevice package.' }
+          Write-Host "[OK] PortAudio: $paDll"
           # 源路径用绝对路径：因为有 --specpath，相对路径会按 .spec 所在目录解析导致找不到模型
           pyinstaller --noconfirm --onedir --windowed `
             --name SoloTalkZhongKao `
             --distpath build_pyi --workpath build_pyi_work --specpath build_pyi_spec `
             --add-data "$env:GITHUB_WORKSPACE\vosk-model-small-en-us-0.15;vosk-model-small-en-us-0.15" `
+            --add-binary "$paDll;sounddevice/_sounddevice_data/portaudio-binaries" `
             --collect-all pyttsx3 `
             --collect-all pygame `
-            --collect-all sounddevice `
             main.py
           if (-not (Test-Path 'build_pyi\SoloTalkZhongKao\SoloTalkZhongKao.exe')) {
             throw 'PyInstaller did not produce build_pyi\SoloTalkZhongKao\SoloTalkZhongKao.exe'
