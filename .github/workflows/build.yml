@@ -226,6 +226,7 @@ jobs:
             --add-binary "$paDll;sounddevice/_sounddevice_data/portaudio-binaries" `
             --collect-all pyttsx3 `
             --collect-all pygame `
+            --collect-all vosk `
             main.py
           if (-not (Test-Path 'build_pyi\SoloTalkZhongKao\SoloTalkZhongKao.exe')) {
             throw 'PyInstaller did not produce build_pyi\SoloTalkZhongKao\SoloTalkZhongKao.exe'
