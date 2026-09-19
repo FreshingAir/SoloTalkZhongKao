@@ -23,11 +23,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python 3.11
+      - name: Setup Python 3.13
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: '3.13'
+
+      # 依赖由下方“Install Python build & runtime deps”用 pip install 显式安装，
+      # 因此这里不启用 setup-python 的 pip 缓存（它需要仓库里有 requirements 文件）。
 
       # Nuitka 会把编译缓存放在一起，缓存在 runner 之间复用，避免每次全量编译 C 代码
       - name: Nuitka cache dir
@@ -80,6 +82,13 @@ jobs:
           foreach ($f in 'installer.iss') {
             if (-not (Test-Path $f)) { throw "Missing required file: $f" }
           }
+
+      # 显式启用 MSVC 工具链。windows-latest 已预装 VS Build Tools，
+      # 这一步调用 vcvars 把 cl.exe / 环境注入到后续步骤，使 Nuitka 跨会话可见 MSVC。
+      - name: Enable MSVC toolchain (vcvars)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
 
       # 与本地 build_nuitka.bat 的参数保持一致，并在此基础上强制使用 MSVC 工具链
       - name: Compile with Nuitka (standalone, MSVC)
