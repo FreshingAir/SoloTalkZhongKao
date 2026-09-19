@@ -6,6 +6,8 @@ nuitka-crash-report.xml
 activate.ps1
 test
 build_pyi
+build_pyi_spec
+build_pyi_work
 build_spec
 build_work
 tts_cache
