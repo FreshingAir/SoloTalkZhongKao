@@ -1,21 +1,27 @@
 name: Windows Build (Nuitka + Inno)
 
-# 触发方式：
-#  - 手动运行（Actions → 本工作流 → Run workflow）
-#  - 推送到 main 分支
-#  - 推送 v* 标签（如 v0.5 即将发布，会额外创建 GitHub Release）
+# 触发：仅手动运行（Actions → 本工作流 → Run workflow），并在下方选择要执行的打包作业。
+# 已取消 git push / PR 自动触发 CI。
 on:
   workflow_dispatch:
-  push:
-    branches: [ master ]
-    tags: [ 'v*' ]
+    inputs:
+      build_target:
+        description: 选择要执行的打包作业
+        required: true
+        type: choice
+        default: both
+        options:
+          - both
+          - nuitka
+          - pyinstaller
 
 permissions:
   contents: write   # 允许创建 GitHub Release
 
 jobs:
   build-windows:
-    name: Build Windows installer
+    if: ${{ github.event.inputs.build_target == 'both' || github.event.inputs.build_target == 'nuitka' }}
+    name: Build Windows installer (Nuitka)
     runs-on: windows-latest
     timeout-minutes: 120
 
@@ -95,8 +101,11 @@ jobs:
       - name: Compile with Nuitka (standalone, MSVC)
         shell: pwsh
         run: |
+          # Nuitka 会读取环境变量 CCFLAGS 并追加到 cl.exe 命令参数之上（--low-memory 同样降低内存压力）
+          $env:CCFLAGS = '/Zm'
           $flags = @(
             '--standalone',
+            '--low-memory',
             '--enable-plugin=pyqt5',
             '--msvc=latest',              # 明确使用 Windows 运行器上预装的 MSVC，禁用其它工具链
             '--assume-yes-for-downloads', # 自动同意下载依赖分析工具(Dependency Walker)，避免 CI 非交互提示卡死
@@ -158,6 +167,7 @@ jobs:
   # 快速打包作业：PyInstaller 不重新编译 C 代码、只收集 Python 与 DLL 文件，
   # 比 Nuitka 快得多（产物体积更大）。适用于不希望等待长时间 C 编译的场景。
   build-windows-pyinstaller:
+    if: ${{ github.event.inputs.build_target == 'both' || github.event.inputs.build_target == 'pyinstaller' }}
     name: Build via PyInstaller (fast)
     runs-on: windows-latest
     timeout-minutes: 60
