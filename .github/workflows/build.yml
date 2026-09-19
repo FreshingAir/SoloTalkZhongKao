@@ -154,3 +154,91 @@ jobs:
           files: |
             installer/*.exe
           draft: true
+
+  # 快速打包作业：PyInstaller 不重新编译 C 代码、只收集 Python 与 DLL 文件，
+  # 比 Nuitka 快得多（产物体积更大）。适用于不希望等待长时间 C 编译的场景。
+  build-windows-pyinstaller:
+    name: Build via PyInstaller (fast)
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install Inno Setup (for installer)
+        shell: pwsh
+        run: choco install -y --no-progress innosetup
+
+      - name: Install Python deps
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install PyQt5 pyttsx3 sounddevice vosk pygame numpy scipy edge-tts pyinstaller
+
+      - name: Ensure clean main.py entry
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'main.py')) {
+            $src = Get-ChildItem -Path . -Filter 'SoloTalk*.py' | Select-Object -First 1
+            if (-not $src) { throw 'No SoloTalk*.py entry file found in repo.' }
+            Copy-Item $src.FullName 'main.py'
+          }
+          Write-Host "Using entry: $((Resolve-Path 'main.py').Path)"
+
+      - name: Download & extract Vosk English model
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri 'https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip' -OutFile 'vosk.zip' -UseBasicParsing
+          Expand-Archive -Path 'vosk.zip' -DestinationPath . -Force
+          Remove-Item 'vosk.zip'
+          if (-not (Test-Path 'vosk-model-small-en-us-0.15\am\final.mdl')) { throw 'Vosk model not extracted.' }
+          Write-Host "[OK] Vosk model ready."
+
+      - name: Build with PyInstaller (onedir)
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --onedir --windowed `
+            --name SoloTalkZhongKao `
+            --distpath build_pyi --workpath build_pyi_work --specpath build_pyi_spec `
+            --add-data "vosk-model-small-en-us-0.15;vosk-model-small-en-us-0.15" `
+            --collect-all pyttsx3 `
+            --collect-all pygame `
+            --collect-all sounddevice `
+            main.py
+          if (-not (Test-Path 'build_pyi\SoloTalkZhongKao\SoloTalkZhongKao.exe')) {
+            throw 'PyInstaller did not produce build_pyi\SoloTalkZhongKao\SoloTalkZhongKao.exe'
+          }
+          Write-Host "[OK] Exe built."
+
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = @(
+            'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
+            'C:\Program Files (x86)\Inno Setup 7\ISCC.exe'
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) { throw 'ISCC.exe not found after choco install.' }
+          & $iscc "/DSrcDir=build_pyi\SoloTalkZhongKao" 'installer.iss'
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup failed.' }
+          $setup = Get-ChildItem 'installer\*.exe' -ErrorAction Stop | Select-Object -First 1
+          Write-Host "[OK] Installer: $($setup.FullName)"
+
+      - name: Upload portable app folder (PyInstaller)
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoloTalk-portable-pyi
+          path: build_pyi/SoloTalkZhongKao
+          if-no-files-found: error
+
+      - name: Upload installer (PyInstaller)
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoloTalk-installer-pyi
+          path: installer/*.exe
+          if-no-files-found: error

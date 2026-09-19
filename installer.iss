@@ -11,8 +11,11 @@
 #define MyAppPublisher "SoloTalk"
 #define MyAppExeName "SoloTalkZhongKao.exe"
 
-; Nuitka --standalone output
-#define SrcDir "build\main.dist"
+; 应用目录可由构建方覆盖：Nuitka 作业默认用 build\main.dist，
+; PyInstaller 作业调用 ISCC 时用 /DSrcDir=<路径> 覆盖（见 #ifndef 守卫）
+#ifndef SrcDir
+  #define SrcDir "build\main.dist"
+#endif
 
 [Setup]
 AppId={{B7D9E3A1-5C42-4F2E-84C0-3D9A21E8F0B4}

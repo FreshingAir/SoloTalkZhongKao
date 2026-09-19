@@ -184,7 +184,9 @@ from PyQt5.QtGui import *
 
 # ------------------ 全局配置 ------------------
 def _app_base_dir():
-    """资源根目录：打包后为 exe 所在目录，运行源码为本文件所在目录。"""
+    """资源根目录：PyInstaller 用 _MEIPASS，Nuitka 用 exe 所在目录，源码用本文件所在目录。"""
+    if hasattr(sys, "_MEIPASS"):
+        return sys._MEIPASS
     if getattr(sys, "frozen", False):
         return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.abspath(__file__))
