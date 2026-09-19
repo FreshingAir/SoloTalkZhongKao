@@ -100,6 +100,7 @@ jobs:
             '--enable-plugin=pyqt5',
             '--msvc=latest',              # 明确使用 Windows 运行器上预装的 MSVC，禁用其它工具链
             '--assume-yes-for-downloads', # 自动同意下载依赖分析工具(Dependency Walker)，避免 CI 非交互提示卡死
+            '--show-progress',            # 编译时显示总进度百分比
             '--windows-console-mode=disable',
             '--output-dir=build',
             '--include-package=vosk',
