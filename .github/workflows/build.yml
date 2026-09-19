@@ -32,10 +32,11 @@ jobs:
       # 因此这里不启用 setup-python 的 pip 缓存（它需要仓库里有 requirements 文件）。
 
       # Nuitka 会把编译缓存放在一起，缓存在 runner 之间复用，避免每次全量编译 C 代码
+      # 注意必须用双引号，使 $env:LOCALAPPDATA 被 PowerShell 正常展开（单引号会写入字面量导致 WinError 267）
       - name: Nuitka cache dir
         shell: pwsh
         run: |
-          'NUITKA_CACHE_DIR=$env:LOCALAPPDATA\Nuitka' >> $env:GITHUB_ENV
+          Write-Output "NUITKA_CACHE_DIR=$env:LOCALAPPDATA\Nuitka" >> $env:GITHUB_ENV
 
       - name: Cache Nuitka build cache
         uses: actions/cache@v4
