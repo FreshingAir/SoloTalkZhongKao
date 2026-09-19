@@ -213,10 +213,11 @@ jobs:
       - name: Build with PyInstaller (onedir)
         shell: pwsh
         run: |
+          # 源路径用绝对路径：因为有 --specpath，相对路径会按 .spec 所在目录解析导致找不到模型
           pyinstaller --noconfirm --onedir --windowed `
             --name SoloTalkZhongKao `
             --distpath build_pyi --workpath build_pyi_work --specpath build_pyi_spec `
-            --add-data "vosk-model-small-en-us-0.15;vosk-model-small-en-us-0.15" `
+            --add-data "$env:GITHUB_WORKSPACE\vosk-model-small-en-us-0.15;vosk-model-small-en-us-0.15" `
             --collect-all pyttsx3 `
             --collect-all pygame `
             --collect-all sounddevice `
