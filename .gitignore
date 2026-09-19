@@ -1,6 +1,13 @@
 __pycache__
 build
 installer
-orgi
 vosk-model-small-en-us-0.15
 nuitka-crash-report.xml
+activate.ps1
+test
+build_pyi
+build_spec
+build_work
+tts_cache
+recordings
+history

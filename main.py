@@ -482,6 +482,27 @@ def question_similarity(ref_question, hyp):
     return min(1.0, f1 + wh_bonus), ref_wh, hyp_wh
 
 # ------------------ 数据模型（江门中考版）------------------
+def _audio_entry_name(part_key, index, audio_path):
+    """生成打包进 .solo 时唯一的 zip entry 路径（含子目录），避免不同部分/同名音频冲突。
+
+    part_key: "partA" / "partB_secA" / "partB_secB" / "partC_secA"
+    index: partB_secA 时为段下标（从 0 起），其余传 None。
+    返回与 to_dict / save_package / from_dict 一致的那一侧完整 entry 名。
+    """
+    if not audio_path:
+        return None
+    base = os.path.basename(audio_path)
+    folder = {
+        "partA": "partA",
+        "partB_secB": "partB_secB",
+        "partC_secA": "partC_secA",
+    }.get(part_key)
+    if folder:
+        return f"audio/{folder}/{base}"
+    if part_key == "partB_secA" and index is not None:
+        return f"audio/partB_secA_{index + 1}/{base}"
+    return base
+
 class SoloPackage:
     def __init__(self):
         self.meta = {
@@ -524,27 +545,27 @@ class SoloPackage:
             "partA": {
                 "audio_source_type": self.partA_audio_source_type,
                 "tts_text": self.partA_tts_text,
-                "audio": os.path.basename(self.partA_audio_path) if self.partA_audio_path else None,
+                "audio": _audio_entry_name("partA", None, self.partA_audio_path),
                 "hidden_text": self.partA_hidden_text
             },
             "partB_secA": [
                 {
                     "audio_source_type": seg.get("audio_source_type"),
                     "tts_text": seg.get("tts_text"),
-                    "audio": os.path.basename(seg.get("audio_path")) if seg.get("audio_path") else None,
+                    "audio": _audio_entry_name("partB_secA", i, seg.get("audio_path")),
                     "questions": seg.get("questions", [])
-                } for seg in self.partB_secA
+                } for i, seg in enumerate(self.partB_secA)
             ],
             "partB_secB": {
                 "audio_source_type": self.partB_secB.get("audio_source_type"),
                 "tts_text": self.partB_secB.get("tts_text"),
-                "audio": os.path.basename(self.partB_secB.get("audio_path")) if self.partB_secB.get("audio_path") else None,
+                "audio": _audio_entry_name("partB_secB", None, self.partB_secB.get("audio_path")),
                 "questions": self.partB_secB.get("questions", [])
             },
             "partC_secA": {
                 "audio_source_type": self.partC_secA.get("audio_source_type"),
                 "tts_text": self.partC_secA.get("tts_text"),
-                "audio": os.path.basename(self.partC_secA.get("audio_path")) if self.partC_secA.get("audio_path") else None,
+                "audio": _audio_entry_name("partC_secA", None, self.partC_secA.get("audio_path")),
                 "key_points": self.partC_secA.get("key_points"),
                 "hidden_answer_points": self.partC_secA.get("hidden_answer_points"),
                 "topic": self.partC_secA.get("topic", "")
@@ -777,17 +798,29 @@ class EditorPage(QWidget):
         self.partB_secB_widget.save_to_pkg()
         self.partC_widget.save_to_pkg()
         try:
+            # 上传的音频（短文/对话等）统一以唯一 entry 名打包进 .solo，
+            # 与 data.json 中的 audio 字段一致，供练习模式解压后直接播放。
+            # 先清理不存在的路径，避免 data.json 引用未被打包的文件。
+            if self.pkg.partA_audio_path and not os.path.exists(self.pkg.partA_audio_path):
+                self.pkg.partA_audio_path = None
+            for seg_idx, seg in enumerate(self.pkg.partB_secA):
+                if seg.get("audio_path") and not os.path.exists(seg["audio_path"]):
+                    seg["audio_path"] = None
+            if self.pkg.partB_secB.get("audio_path") and not os.path.exists(self.pkg.partB_secB["audio_path"]):
+                self.pkg.partB_secB["audio_path"] = None
+            if self.pkg.partC_secA.get("audio_path") and not os.path.exists(self.pkg.partC_secA["audio_path"]):
+                self.pkg.partC_secA["audio_path"] = None
             with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as zf:
                 zf.writestr('data.json', json.dumps(self.pkg.to_dict(), indent=2, ensure_ascii=False))
-                if self.pkg.partA_audio_path and os.path.exists(self.pkg.partA_audio_path):
-                    zf.write(self.pkg.partA_audio_path, os.path.basename(self.pkg.partA_audio_path))
-                for seg in self.pkg.partB_secA:
-                    if seg.get("audio_path") and os.path.exists(seg["audio_path"]):
-                        zf.write(seg["audio_path"], os.path.basename(seg["audio_path"]))
-                if self.pkg.partB_secB.get("audio_path") and os.path.exists(self.pkg.partB_secB["audio_path"]):
-                    zf.write(self.pkg.partB_secB["audio_path"], os.path.basename(self.pkg.partB_secB["audio_path"]))
-                if self.pkg.partC_secA.get("audio_path") and os.path.exists(self.pkg.partC_secA["audio_path"]):
-                    zf.write(self.pkg.partC_secA["audio_path"], os.path.basename(self.pkg.partC_secA["audio_path"]))
+                if self.pkg.partA_audio_path:
+                    zf.write(self.pkg.partA_audio_path, _audio_entry_name("partA", None, self.pkg.partA_audio_path))
+                for seg_idx, seg in enumerate(self.pkg.partB_secA):
+                    if seg.get("audio_path"):
+                        zf.write(seg["audio_path"], _audio_entry_name("partB_secA", seg_idx, seg["audio_path"]))
+                if self.pkg.partB_secB.get("audio_path"):
+                    zf.write(self.pkg.partB_secB["audio_path"], _audio_entry_name("partB_secB", None, self.pkg.partB_secB["audio_path"]))
+                if self.pkg.partC_secA.get("audio_path"):
+                    zf.write(self.pkg.partC_secA["audio_path"], _audio_entry_name("partC_secA", None, self.pkg.partC_secA["audio_path"]))
             QMessageBox.information(self, "成功", f"题目包已保存至 {path}")
         except Exception as e:
             QMessageBox.critical(self, "保存失败", str(e))
@@ -918,11 +951,13 @@ class PartBSecAEditor(QWidget):
             self.segment_widgets[seg_idx]["audio_lbl"].setText(os.path.basename(path))
 
     def save_to_pkg(self):
+        # 先记录各个材料的上传音频路径，避免重建 partB_secA 时丢失
+        old_audio = {}
+        for seg_idx, seg in enumerate(self.pkg.partB_secA):
+            old_audio[seg_idx] = seg.get("audio_path")
         self.pkg.partB_secA = []
         for seg_idx, w in enumerate(self.segment_widgets):
-            audio_path = None
-            if seg_idx < len(self.pkg.partB_secA):
-                audio_path = self.pkg.partB_secA[seg_idx].get("audio_path")
+            audio_path = old_audio.get(seg_idx)
             seg = {
                 "audio_source_type": "tts" if w["src_combo"].currentIndex() == 0 else "audio",
                 "tts_text": w["tts_edit"].toPlainText(),
@@ -1170,6 +1205,9 @@ class PracticePage(QWidget):
     signal_update_display = pyqtSignal(str, str)
     signal_tts_ready = pyqtSignal()
     signal_finished = pyqtSignal()
+    # 后台线程（TTS / 音频播放）完成后的流程回调，统一调度回 GUI 线程执行，
+    # 避免在后台线程直接操作 QTimer / 控件导致倒计时等 Qt 事件无法正常处理。
+    signal_flow_step = pyqtSignal(object)
 
     def __init__(self, main_window):
         super().__init__()
@@ -1182,6 +1220,7 @@ class PracticePage(QWidget):
         self._phase_end_time = 0
         self._timer_callback = None
         self._audio_frames = []
+        self._audio_lock = threading.Lock()
         self._stream = None
         self._is_recording = False
         self._tts_stop_event = None
@@ -1190,6 +1229,16 @@ class PracticePage(QWidget):
         self.signal_update_display.connect(self._update_display)
         self.signal_tts_ready.connect(self._on_tts_ready)
         self.signal_finished.connect(self._on_exam_finished)
+        self.signal_flow_step.connect(self._on_flow_step)
+
+    @pyqtSlot(object)
+    def _on_flow_step(self, cb):
+        """在 GUI 线程执行流程回调，统一兜底异常，避免回调失败中断考试。"""
+        try:
+            cb()
+        except Exception as e:
+            print(f"[ERROR] 流程回调执行异常: {e}")
+            QMessageBox.critical(self, "流程错误", f"流程回调失败：{e}")
 
     def setup_ui(self):
         layout = QVBoxLayout()
@@ -1319,7 +1368,8 @@ class PracticePage(QWidget):
                 print(f"TTS 内部错误: {e}")
             finally:
                 if callback:
-                    callback()
+                    # 回调切回 GUI 线程执行，避免在后台线程操作 QTimer / 控件。
+                    self.signal_flow_step.emit(callback)
         self._tts_thread = threading.Thread(target=runner, daemon=True)
         self._tts_thread.start()
 
@@ -1390,12 +1440,17 @@ class PracticePage(QWidget):
             skip_recording(str(e))
             return
 
-        self._audio_frames = []
+        with self._audio_lock:
+            self._audio_frames = []
         self._is_recording = True
 
         def callback(indata, frames, time_info, status):
-            if self._is_recording:
-                self._audio_frames.append(indata.copy())
+            # 回调运行在 PortAudio 线程，必须绝不抛异常，否则会挂死整个录音流。
+            try:
+                if self._is_recording:
+                    self._audio_frames.append(indata.copy())
+            except Exception:
+                pass
 
         try:
             self._stream = sd.InputStream(samplerate=SAMPLE_RATE, channels=1,
@@ -1411,11 +1466,24 @@ class PracticePage(QWidget):
         self.sub_label.setText(self.sub_label.text() + "\n🔴 录音中...")
 
     def _stop_recording(self):
+        # 先把录音标志置位，避免回调线程继续写入。
         self._is_recording = False
-        if self._stream:
-            self._stream.stop()
-            self._stream.close()
-            self._stream = None
+        stream = self._stream
+        self._stream = None
+        if stream is not None:
+            # stop()/close() 可能因底层缓冲阻塞 GUI 事件循环（表现为倒计时停住），
+            # 放到后台线程里关闭，避免卡住界面；数据已通过回调线程持续写入 _audio_frames，
+            # 所以关闭流不影响录音完整性。
+            def _close_stream(s):
+                try:
+                    s.stop()
+                except Exception:
+                    pass
+                try:
+                    s.close()
+                except Exception:
+                    pass
+            threading.Thread(target=_close_stream, args=(stream,), daemon=True).start()
 
     def stop_recording(self):
         self._stop_recording()
@@ -1428,9 +1496,15 @@ class PracticePage(QWidget):
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         fname = f"{safe_name}_{label}_{ts}.wav"
         path = os.path.join(base_dir, fname)
-        if self._audio_frames:
-            data = np.concatenate(self._audio_frames)
-            wav_write.write(path, SAMPLE_RATE, data)
+        # 在锁内取出帧快照，避免与回调线程并发修改导致卡死 / 崩溃。
+        with self._audio_lock:
+            frames = list(self._audio_frames)
+        if frames:
+            try:
+                data = np.concatenate(frames)
+                wav_write.write(path, SAMPLE_RATE, data)
+            except Exception as e:
+                print(f"[ERROR] 保存录音失败: {e}")
         return path
 
     # ---------- 一、模仿朗读 ----------
@@ -1498,17 +1572,24 @@ class PracticePage(QWidget):
         self.signal_update_display.emit(f"材料 {self._secA_idx+1} 阅题 (10秒)", text)
         self._set_timer(10, self._play_secA_first)
 
-    def _play_secA_first(self):
+    def _secA_questions_text(self):
         seg = self.pkg.partB_secA[self._secA_idx]
-        self.signal_update_display.emit(f"材料 {self._secA_idx+1} 第一遍", "")
+        text = f"材料 {self._secA_idx+1}\n"
+        for i, q in enumerate(seg["questions"]):
+            text += f"\n问题{i+1}: {q['question_text']}\n"
+        return text
+
+    def _play_secA_first(self):
+        self.signal_update_display.emit(f"材料 {self._secA_idx+1} 第一遍", self._secA_questions_text())
+        seg = self.pkg.partB_secA[self._secA_idx]
         self._play_audio(seg["audio_source_type"], seg["tts_text"], seg["audio_path"], self._secA_first_done)
 
     def _secA_first_done(self):
         self._set_timer(1, self._play_secA_second)
 
     def _play_secA_second(self):
+        self.signal_update_display.emit(f"材料 {self._secA_idx+1} 第二遍", self._secA_questions_text())
         seg = self.pkg.partB_secA[self._secA_idx]
-        self.signal_update_display.emit(f"材料 {self._secA_idx+1} 第二遍", "")
         self._play_audio(seg["audio_source_type"], seg["tts_text"], seg["audio_path"], self._secA_second_done)
 
     def _secA_second_done(self):
@@ -1665,13 +1746,16 @@ class PracticePage(QWidget):
         """播放音频；无论成功与否，都保证回调被触发，避免流程卡死。"""
         self.skip_btn.setEnabled(True)
         def safe_call():
-            self.skip_btn.setEnabled(False)
-            if callback:
-                try:
-                    callback()
-                except Exception as e:
-                    print(f"[ERROR] 播放回调异常: {e}")
-                    QMessageBox.critical(self, "流程错误", f"播放回调失败：{e}")
+            # 切回 GUI 线程再操作控件并触发回调（TTS / 播放回调可能来自后台线程）。
+            def _f():
+                self.skip_btn.setEnabled(False)
+                if callback:
+                    try:
+                        callback()
+                    except Exception as e:
+                        print(f"[ERROR] 播放回调异常: {e}")
+                        QMessageBox.critical(self, "流程错误", f"播放回调失败：{e}")
+            self.signal_flow_step.emit(_f)
 
         if source_type == "tts":
             if not tts_text or not tts_text.strip():
@@ -1696,7 +1780,7 @@ class PracticePage(QWidget):
     # ---------- 考后批改 ----------
     def _on_exam_finished(self):
         self.start_btn.setEnabled(True)
-        QMessageBox.information(self, "模考完成", "练习结束，即将进行离线批改。")
+        QMessageBox.information(self, "模考完成", "练习结束，即将进行离线机器批改。")
         self.run_evaluation()
 
     def run_evaluation(self):
@@ -1707,7 +1791,83 @@ class PracticePage(QWidget):
             return
         self._perform_evaluation(vosk_model)
         self._save_history()
-        QMessageBox.information(self, "批改完成", "练习记录与参考批改已保存至历史记录。")
+        # 批改完成后立即弹出机器批改报告，展示总分与各部分得分（含复述短文）。
+        self._show_evaluation_report()
+        QMessageBox.information(self, "批改完成", "练习记录与机器批改已保存至历史记录。")
+
+    def _show_evaluation_report(self):
+        """考试完成立即弹出批改报告，重点展示复述短文等各部分的机器批改得分。"""
+        ev = self.session.evaluation or {}
+        total = ev.get('total', {})
+        lines = []
+        lines.append(f"总分：{total.get('score', 0)} 分（共 {total.get('items', 0)} 项）")
+        lines.append("=" * 48)
+
+        # Part A 模仿朗读
+        pa = ev.get('partA')
+        if pa:
+            lines.append(f"一、模仿朗读：{pa.get('score', 0)} 分")
+            lines.append(f"    识别文本：{pa.get('recognized', '')}")
+            lines.append(f"    相似度：{pa.get('accuracy', 0) * 100:.1f}%")
+
+        # Part B SecA 听选信息
+        pbA = ev.get('partB_secA') or []
+        if pbA:
+            lines.append("二(1) 听选信息：")
+            for r in pbA:
+                lines.append(f"    第{r.get('seg')}-{r.get('q')}题 {r.get('score')} 分"
+                             f"（{'命中' if r.get('hit') else '未命中'}）应答：{r.get('best_answer', '')}")
+
+        # Part B SecB 回答问题
+        pbB = ev.get('partB_secB') or []
+        if pbB:
+            lines.append("二(2) 回答问题：")
+            for r in pbB:
+                lines.append(f"    第{r.get('q')}题 {r.get('score')} 分"
+                             f"（{'命中' if r.get('hit') else '未命中'}）应答：{r.get('best_answer', '')}")
+
+        # Part C SecA 复述短文（信息转述）
+        pcA = ev.get('partC_secA')
+        if pcA:
+            lines.append("三、复述短文（信息转述）：")
+            lines.append(f"    得分：{pcA.get('score', 0)} 分")
+            lines.append(f"    要点覆盖：{pcA.get('key_points_hit', '0/0')}")
+            lines.append(f"    参考范文相似度：{pcA.get('best_version_similarity', 0) * 100:.1f}%")
+            details = pcA.get('point_details') or []
+            if details:
+                hit_tokens = []
+                for d in details:
+                    if d.get('hit'):
+                        hit_tokens.append(" ".join(d.get('tokens', [])))
+                lines.append("    识别文本：" + pcA.get('recognized', ''))
+                lines.append(f"    命中要点内容：{('；'.join(hit_tokens)) if hit_tokens else '未覆盖任何要点'}")
+
+        # Part C SecB 询问信息
+        pcB = ev.get('partC_secB') or []
+        if pcB:
+            lines.append("三、询问信息：")
+            for r in pcB:
+                flag = "✓" if r.get('score', 0) >= 60 else "✗"
+                lines.append(f"    第{r.get('q')}题 {r.get('score')} 分 {flag}")
+
+        if not (pa or pbA or pbB or pcA or pcB):
+            lines.append("（本套题目未包含批改项）")
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("机器批改报告")
+        dlg.resize(720, 560)
+        lay = QVBoxLayout(dlg)
+        header = QLabel("✅ 考试完成，机器批改得分如下")
+        header.setStyleSheet("font-size:16px; font-weight:bold; color:#2c3e50;")
+        browser = QTextBrowser()
+        browser.setFont(QFont("Microsoft YaHei", 10))
+        browser.setPlainText("\n".join(lines))
+        btn = QPushButton("确定")
+        btn.clicked.connect(dlg.accept)
+        lay.addWidget(header)
+        lay.addWidget(browser)
+        lay.addWidget(btn, alignment=Qt.AlignRight)
+        dlg.exec_()
 
     def _perform_evaluation(self, vosk_model):
         eval_result = {}
@@ -1957,9 +2117,21 @@ class HistoryPage(QWidget):
             detail += f"询问信息{i+1}: {r}\n"
         detail += "\n批改结果：\n"
         ev = data.get('evaluation', {})
+        total = ev.get('total', {})
+        detail += f"总分：{total.get('score', 0)} 分（共 {total.get('items', 0)} 项）\n"
         if 'partA' in ev:
-            detail += f"Part A 准确率: {ev['partA'].get('accuracy',0)*100:.1f}%  WER: {ev['partA'].get('wer',0):.2f}\n"
-        detail += "\n批改结果基于离线语音识别，仅供参考。"
+            detail += f"Part A 模仿朗读：{ev['partA'].get('score', 0)} 分  "
+            detail += f"准确率 {ev['partA'].get('accuracy',0)*100:.1f}%  WER {ev['partA'].get('wer',0):.2f}\n"
+        pcA = ev.get('partC_secA')
+        if pcA:
+            detail += f"\n复述短文（信息转述）：{pcA.get('score', 0)} 分\n"
+            detail += f"  要点覆盖：{pcA.get('key_points_hit', '0/0')}\n"
+            detail += f"  参考范文相似度：{pcA.get('best_version_similarity', 0)*100:.1f}%\n"
+            detail += f"  识别文本：{pcA.get('recognized', '')}\n"
+            for d in (pcA.get('point_details') or []):
+                mark = "✔" if d.get('hit') else "✘"
+                detail += f"    {mark} 要点 {(' '.join(d.get('tokens', [])))} 覆盖 {d.get('covered', 0)*100:.0f}%\n"
+        detail += "\n批改结果基于离线语音识别的机器批改，仅供参考。"
         QMessageBox.information(self, "练习详情", detail)
 
 def load_vosk_model():

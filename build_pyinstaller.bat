@@ -3,8 +3,8 @@ setlocal
 cd /d "%~dp0"
 
 rem ===================================================
-rem  SoloTalk Zhongkao build: Nuitka (standalone) + Inno
-rem  Mirrors the Nuitka job in .github/workflows/build.yml
+rem  SoloTalk Zhongkao build: PyInstaller (onedir, fast) + Inno
+rem  Mirrors the PyInstaller job in .github/workflows/build.yml
 rem  NOTE: keep this file PURE ASCII and CRLF. Chinese
 rem        text here crashes cmd on GBK systems.
 rem ===================================================
@@ -24,58 +24,51 @@ echo ================================================
 echo  [1/4] Installing build & runtime dependencies
 echo ================================================
 python -m pip install --upgrade pip
-python -m pip install --upgrade nuitka ordered-set zstandard imageio
-python -m pip install PyQt5 pyttsx3 sounddevice vosk pygame numpy scipy edge-tts
+python -m pip install PyQt5 pyttsx3 sounddevice vosk pygame numpy scipy edge-tts pyinstaller
 if errorlevel 1 goto :fail
 
 rem ---- ensure clean entry file main.py ----
 if exist "main.py" goto :have_main
 for %%F in (SoloTalk*.py) do copy /y "%%F" "main.py" >nul
 :have_main
-if exist "main.py" goto :run_nuitka
+if exist "main.py" goto :run_pyi
 echo [ERROR] cannot find the main python file (expect a SoloTalk*.py here).
 goto :fail
 
-:run_nuitka
+:run_pyi
 echo.
 echo ================================================
-echo  [1.5/4] Activating portable MSVC toolchain (mirror CI msvc-dev-cmd)
+echo  [2/4] PyInstaller onedir build (no C compile)
 echo ================================================
-if exist "activate.ps1" (
-  powershell -ExecutionPolicy Bypass -File "%~dp0activate.ps1"
-  if errorlevel 1 goto :fail
-  echo [OK] MSVC toolchain activated via activate.ps1
-) else (
-  echo [WARN] activate.ps1 not found. Falling back to whatever toolchain python finds.
+rem sounddevice is a single-file module; --collect-all misses its PortAudio DLL.
+rem Locate the DLL inside the wheel and place it on the runtime search path.
+for /f "delims=" %%D in ('python -c "import glob,os,sounddevice as s; p=os.path.join(os.path.dirname(s.__file__),'_sounddevice_data','portaudio-binaries'); import sys; print(glob.glob(os.path.join(p,'libportaudio*.dll'))[0])"') do set "PA_DLL=%%D"
+if not defined PA_DLL (
+  echo [ERROR] PortAudio DLL not found in sounddevice package.
+  goto :fail
 )
+echo [OK] PortAudio: %PA_DLL%
 
-echo.
-echo ================================================
-echo  [2/4] Nuitka standalone compile. First run is
-echo        slow (compiles C). Please be patient.
-echo ================================================
-rem CCFLAGS is read by Nuitka and appended to cl.exe, matching CI and reducing /Zm pressure
-set CCFLAGS=/Zm800
-set FLAGS=--standalone --enable-plugin=pyqt5 --low-memory --msvc=latest --assume-yes-for-downloads
-set FLAGS=%FLAGS% --windows-console-mode=disable --output-dir=build
-set FLAGS=%FLAGS% --include-package=vosk
-set FLAGS=%FLAGS% --include-package=pygame
-set FLAGS=%FLAGS% --include-package=sounddevice
-set FLAGS=%FLAGS% --include-package=edge_tts
-set FLAGS=%FLAGS% --include-package-data=edge_tts
-set FLAGS=%FLAGS% --include-package=scipy
-set FLAGS=%FLAGS% --include-package=numpy
-set FLAGS=%FLAGS% --output-filename=SoloTalkZhongKao.exe
-if defined HAVE_MODEL set FLAGS=%FLAGS% --include-data-dir=vosk-model-small-en-us-0.15=vosk-model-small-en-us-0.15
-
-python -m nuitka %FLAGS% main.py
+rem use absolute source path: with --specpath, relative paths resolve against the .spec dir
+set "PA_ADD=;sounddevice\_sounddevice_data\portaudio-binaries"
+set "PYI_DATA="
+if defined HAVE_MODEL set "PYI_DATA=--add-data %CD%\vosk-model-small-en-us-0.15;vosk-model-small-en-us-0.15"
+pyinstaller --noconfirm --onedir --windowed ^
+  --name SoloTalkZhongKao ^
+  --distpath build_pyi --workpath build_pyi_work --specpath build_pyi_spec ^
+  %PYI_DATA% ^
+  --add-binary "%PA_DLL%%PA_ADD%" ^
+  --collect-all pyttsx3 ^
+  --collect-all pygame ^
+  --collect-all vosk ^
+  main.py
 if errorlevel 1 goto :fail
 
-set "DIST=build\main.dist"
-if exist "%DIST%" goto :output_ok
-echo [ERROR] build\main.dist was not created.
-goto :fail
-:output_ok
+set "DIST=build_pyi\SoloTalkZhongKao"
+if not exist "%DIST%" (
+  echo [ERROR] PyInstaller did not produce %DIST%
+  goto :fail
+)
 
 rem ---- locate Inno Setup (6 or 7) ----
 set "ISCC="
@@ -94,7 +87,7 @@ echo ================================================
 echo  [3/4] Building installer with Inno: %ISCC%
 echo  Source folder: %DIST%
 echo ================================================
-"%ISCC%" installer.iss
+"%ISCC%" "/DSrcDir=%DIST%" installer.iss
 if errorlevel 1 echo [WARN] Inno compile failed (installer.iss). App folder is ready.
 
 :done
