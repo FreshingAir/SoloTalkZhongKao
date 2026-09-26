@@ -187,3 +187,34 @@
 ### 5、历史记录的使用
 
 当你完成一次考试后，点击历史模式可以查看你的考试记录，双击打开题目文件的名字，可以看到批改结果与答案。可以在SoloTalk.exe文件的同级地址找到一个名为recording的文件夹，里面有考试的录音文件，可以重新听并自行与答案进行比对（虽然不推荐，但若想通过该软件备考，强烈建议进行此步骤，因为该软件的电脑机改是不够好的。）
+
+## 项目结构（开发者向）
+
+源代码按职责拆分在 `solotalk` 包内，`main.py` 只负责初始化运行环境、创建 `QApplication` 并显示主窗口：
+
+```
+main.py                  程序入口（启动横幅 → QApplication → MainWindow）
+solotalk/
+├─ paths.py              运行环境与资源路径：DLL 注册、诊断日志、异常钩子、工作目录
+├─ config.py             全局常量：版本号、目录、采样率、30/25 分制表
+├─ settings.py           用户设置（solotalk_settings.json）读写
+├─ win_key_blocker.py    模考期间屏蔽 Win / Alt+Tab
+├─ tts.py                语音合成：edge-tts 优先，失败回退系统 SAPI5
+├─ asr.py                Vosk 离线识别与模型加载
+├─ scoring.py            Levenshtein WER / Jaccard / 要点覆盖 + 分数换算
+├─ models.py             SoloPackage（.solo 题目包）与 PracticeSession
+├─ evaluation.py         一次练习会话的离线批改
+├─ updater.py            版本更新检查（多源回退）
+└─ ui/
+   ├─ main_window.py     主窗口：页面堆叠、关闭确认、更新弹窗
+   ├─ home_page.py       首页：编辑 / 练习 / 模考 / 历史 入口
+   ├─ editor/            编辑模式：page + Part A / B / C 子编辑器
+   ├─ practice/          练习与模考：page + 音频 / 录音 / 进度 / Part A-C / 批改 各 Mixin
+   ├─ history_page.py    历史记录：列表、详情、重新批改、删除
+   └─ more_page.py       更多：关于 / 更新下载 / 使用须知
+```
+
+依赖方向自上而下单向流动，`ui` 之外的模块不依赖界面，可独立测试；`ui/practice` 中的 `PracticePage` 由若干职责单一的 Mixin 组合而成，便于按功能定位代码。
+
+打包无需改动：`build_nuitka.bat`、`build_pyinstaller.bat`、`installer.iss` 与 CI 仍以 `main.py` 为入口，会自动带上 `solotalk/` 包。
+
