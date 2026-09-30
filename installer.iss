@@ -6,7 +6,7 @@
 ;  renders Chinese correctly.
 ; =====================================================================
 
-#define MyAppName "SoloTalk 江门中考版"
+#define MyAppName "SoloTalk 中考专版"
 #define MyAppVersion "0.5"
 #define MyAppPublisher "SoloTalk"
 #define MyAppExeName "SoloTalkZhongKao.exe"
