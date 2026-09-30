@@ -35,7 +35,8 @@ class PracticePage(PartAMixin, PartBMixin, PartCMixin,
     signal_update_display = pyqtSignal(str, str)
     signal_tts_ready = pyqtSignal()
     signal_tts_next = pyqtSignal()
-    signal_tts_file_ready = pyqtSignal(str)
+    # 生成完成的朗读文件；(路径, 任务代次) —— 代次用于丢弃被“跳过/上一步”取消的旧任务
+    signal_tts_file_ready = pyqtSignal(str, int)
     signal_finished = pyqtSignal()
 
     def __init__(self, main_window):
@@ -62,6 +63,8 @@ class PracticePage(PartAMixin, PartBMixin, PartCMixin,
         self._is_recording = False
         self._tts_stop_event = None
         self._tts_thread = None
+        self._tts_token = 0
+        self._tts_done_token = None
         self._tts_next_callback = None
         self._audio_callback = None
         self._navigating = False
@@ -100,7 +103,7 @@ class PracticePage(PartAMixin, PartBMixin, PartCMixin,
         self.text_display = QTextEdit()
         self.text_display.setReadOnly(True)
         self.text_display.setStyleSheet("font-size:18px;")
-        self.text_display.setMaximumHeight(180)
+        self.text_display.setMaximumHeight(260)
 
         self.mindmap_label = QLabel()
         self.mindmap_label.setAlignment(Qt.AlignCenter)
@@ -216,6 +219,8 @@ class PracticePage(PartAMixin, PartBMixin, PartCMixin,
         self._c_step = 0
         self._b_moments = []
         self._timer_callback = None
+        self._tts_token += 1          # 让在途的朗读任务作废
+        self._tts_done_token = None
         self._tts_next_callback = None
         self._audio_callback = None
         self._is_recording = False

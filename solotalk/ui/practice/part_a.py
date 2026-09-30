@@ -8,6 +8,16 @@ class PartAMixin:
         self._step_index = 0
         self._exec_partA_step()
 
+    def _partA_reading_text(self):
+        """Part A 准备/朗读阶段要展示的原文。
+
+        优先用编辑器里的“原文(隐藏)”，没有填写时退回电脑朗读用的短文文本；
+        两者都为空则返回空串（界面只显示提示语）。
+        """
+        pkg = self.pkg
+        text = (getattr(pkg, "partA_hidden_text", "") or "").strip()
+        return text or (getattr(pkg, "partA_tts_text", "") or "").strip()
+
     def _exec_partA_step(self):
         """Part A 的 5 个步骤，按 _step_index 顺序推进。"""
         self._update_nav_buttons()
@@ -27,10 +37,12 @@ class PartAMixin:
                 self.pkg.partA_audio_path,
                 self._next_partA_step)
         elif idx == 2:
-            self.signal_update_display.emit("请准备朗读。", "")
+            # 准备阶段起展示原文，便于对照短文准备朗读
+            self.signal_update_display.emit("请准备朗读。", self._partA_reading_text())
             self._set_timer(50)
         elif idx == 3:
-            self.signal_update_display.emit("请开始模仿朗读 (60秒)。", "")
+            self.signal_update_display.emit("请开始模仿朗读 (60秒)。",
+                                            self._partA_reading_text())
             self._start_recording()
             self._set_timer(60)
         else:

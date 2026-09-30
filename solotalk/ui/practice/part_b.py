@@ -100,9 +100,10 @@ class PartBMixin:
         elif t == "secA_play1":
             seg = self.pkg.partB_secA[m["seg"]]
             self.signal_update_display.emit(m["main"], "")
+            # 听选信息为双角色对话：W: 行女声、M: 行男声
             self._play_audio_by_source(
                 seg.get("audio_source_type"), seg.get("tts_text"),
-                seg.get("audio_path"), self._next_partB_step)
+                seg.get("audio_path"), self._next_partB_step, dialogue=True)
 
         elif t == "secA_gap":
             self._set_timer(1)
@@ -112,7 +113,7 @@ class PartBMixin:
             self.signal_update_display.emit(m["main"], "")
             self._play_audio_by_source(
                 seg.get("audio_source_type"), seg.get("tts_text"),
-                seg.get("audio_path"), self._next_partB_step)
+                seg.get("audio_path"), self._next_partB_step, dialogue=True)
 
         elif t == "secA_q":
             self.signal_update_display.emit(m["main"], m["sub"])

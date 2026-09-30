@@ -73,7 +73,11 @@ class PartBSecAEditor(QWidget):
             src_combo = QComboBox()
             src_combo.addItems(["💻电脑 TTS", "上传音频"])
             tts_edit = QTextEdit()
-            tts_edit.setPlaceholderText("听力原文（TTS朗读）")
+            tts_edit.setPlaceholderText(
+                "听力原文（TTS朗读）。双角色对话请每行一个角色：\n"
+                "W: 女声台词\n"
+                "M: 男声台词\n"
+                "标记只用于区分音色，不会被朗读。")
             hbox = QHBoxLayout()
             hbox.addWidget(QLabel("音频来源："))
             hbox.addWidget(src_combo)
