@@ -63,6 +63,8 @@ _CJK_RE = re.compile(r'[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\u3000-\u303f\uff
 _LATIN_RE = re.compile(r'[A-Za-z]')
 # 句末标点：中文标点后可直接切分，英文标点后需跟空白再切分
 _SENT_SPLIT_RE = re.compile(r'(?<=[。！？；…])\s*|(?<=[.!?;:])\s+')
+# 可朗读字符：纯标点片段（如中英混排末尾的“。”）交给 edge-tts 会返回空音频
+_SPEAKABLE_RE = re.compile(r'[0-9A-Za-z\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]')
 # 行首说话人标记：W:/M:（兼容全角冒号与多余空格）
 _SPEAKER_RE = re.compile(r'^\s*([WMwm])\s*[:：]\s*')
 
@@ -148,7 +150,8 @@ def build_voice_plan(text, dialogue=True):
                 plan[-1][2] = plan[-1][2] + " " + chunk
             else:
                 plan.append([lang, gender, chunk])
-    return [(lang, gender, chunk) for lang, gender, chunk in plan if chunk.strip()]
+    return [(lang, gender, chunk) for lang, gender, chunk in plan
+            if _SPEAKABLE_RE.search(chunk)]
 
 
 def _edge_voice(lang, gender=None):

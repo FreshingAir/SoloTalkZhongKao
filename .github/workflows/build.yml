@@ -1,4 +1,4 @@
-name: Windows Build (Nuitka + Inno)
+name: Windows Build (Nuitka/PyInstaller + Inno)
 
 # 触发：仅手动运行（Actions → 本工作流 → Run workflow），并在下方选择要执行的打包作业。
 # 已取消 git push / PR 自动触发 CI。
@@ -33,9 +33,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-
-      # 依赖由下方“Install Python build & runtime deps”用 pip install 显式安装，
-      # 因此这里不启用 setup-python 的 pip 缓存（它需要仓库里有 requirements 文件）。
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
 
       # Nuitka 会把编译缓存放在一起，缓存在 runner 之间复用，避免每次全量编译 C 代码
       # 注意必须用双引号，使 $env:LOCALAPPDATA 被 PowerShell 正常展开（单引号会写入字面量导致 WinError 267）
@@ -59,7 +58,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install --upgrade nuitka ordered-set zstandard imageio
-          python -m pip install PyQt5 pyttsx3 sounddevice vosk pygame numpy scipy edge-tts
+          python -m pip install -r requirements.txt
 
       # 入口文件名可能为中文（如“SoloTalk…测试版_v0.5..py”），统一复制为干净的 main.py
       - name: Ensure clean main.py entry
@@ -180,6 +179,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
 
       - name: Install Inno Setup (for installer)
         shell: pwsh
@@ -189,7 +190,8 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          python -m pip install PyQt5 pyttsx3 sounddevice vosk pygame numpy scipy edge-tts pyinstaller
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller
 
       - name: Ensure clean main.py entry
         shell: pwsh

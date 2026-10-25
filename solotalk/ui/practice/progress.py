@@ -8,10 +8,9 @@ import os
 import json
 import datetime
 
-from PyQt5.QtWidgets import QMessageBox
-
 from ...config import DEFAULT_SCHEME, HISTORY_DIR
 from ...models import PracticeSession
+from ..theme import FluentMessageDialog, ICON_HISTORY
 
 
 class ProgressMixin:
@@ -107,17 +106,17 @@ class ProgressMixin:
             return
         mode_text = "模考" if self.mode == "exam" else "练习"
         desc = self._describe_progress(saved)
-        msg = QMessageBox(self)
-        msg.setWindowTitle("恢复进度")
-        msg.setText(f"检测到未完成的{mode_text}进度：\n\n{desc}\n\n是否继续？")
-        btn_continue = msg.addButton(f"继续{mode_text}", QMessageBox.AcceptRole)
-        btn_restart = msg.addButton("重新开始", QMessageBox.RejectRole)
-        msg.setDefaultButton(btn_continue)
-        msg.exec_()
-        clicked = msg.clickedButton()
-        if clicked == btn_continue:
+        dlg = FluentMessageDialog(
+            self, "恢复进度",
+            f"检测到未完成的{mode_text}进度，是否从上次的位置继续？",
+            informative=desc, icon=ICON_HISTORY,
+            buttons=(("重新开始", "secondary", "restart"),
+                     (f"继续{mode_text}", "primary", "continue")),
+            default_key="continue")
+        dlg.exec_()
+        if dlg.clicked_key == "continue":
             self._restore_progress(saved)
-        elif clicked == btn_restart:
+        elif dlg.clicked_key == "restart":
             self._clear_progress(delete_recordings=True)
             self.start_btn.setText(f"开始{mode_text}")
 

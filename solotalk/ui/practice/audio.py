@@ -6,12 +6,12 @@ import threading
 
 import pygame
 
-from PyQt5.QtWidgets import QMessageBox
 from PyQt5.QtCore import QTimer
 
 from ...paths import resolve_resource_file
 from ...tts import (EDGE_TTS_AVAILABLE, tts_cached_path,
                     speak_blocking, tts_generate_audio)
+from ..theme import ICON_WARN, notify
 
 
 class AudioMixin:
@@ -125,7 +125,8 @@ class AudioMixin:
                 self._audio_callback = callback
                 self._play_file(audio_path)
             else:
-                QMessageBox.warning(self, "警告", "音频文件不存在，跳过")
+                notify(self, "音频文件不存在", "该题目的音频文件缺失，本步骤已跳过。",
+                       icon=ICON_WARN)
                 callback()
 
     def _play_beep(self, callback, **kwargs):

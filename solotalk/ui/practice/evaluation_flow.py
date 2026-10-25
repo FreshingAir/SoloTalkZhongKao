@@ -6,12 +6,11 @@ import json
 import shutil
 import datetime
 
-from PyQt5.QtWidgets import QMessageBox
-
 from ...asr import load_vosk_model
 from ...config import HISTORY_DIR
 from ...evaluation import evaluate_recordings
 from ...scoring import compute_scores
+from ..theme import ICON_OK, ICON_WARN, notify
 
 
 class EvaluationMixin:
@@ -23,27 +22,26 @@ class EvaluationMixin:
         self._restore_window()
         self._unblock_windows_key()
         self._clear_progress()
-        if self.mode == "exam":
-            QMessageBox.information(self, "模考完成", "模考结束，即将进行离线批改。")
-        else:
-            QMessageBox.information(self, "练习完成", "练习结束，即将进行离线批改。")
         self.run_evaluation()
 
     def run_evaluation(self):
         """加载 Vosk 模型并批改；模型不可用时只保存录音。"""
         vosk_model = load_vosk_model()
         if not vosk_model:
-            QMessageBox.warning(self, "批改", "Vosk 模型不可用，录音已保存，稍后可重新批改。")
             self._save_history()
+            notify(self, "无法自动批改",
+                   "Vosk 离线识别模型不可用，录音已保存，稍后可在历史记录里重新批改。",
+                   icon=ICON_WARN)
             return
         self._perform_evaluation(vosk_model)
         self._save_history()
         sc = self.session.evaluation.get("scores", {})
-        QMessageBox.information(
+        notify(
             self, "批改完成",
             f"本次得分：{sc.get('total', 0)} / {sc.get('total_max', 0)}"
-            f"（{sc.get('scheme_name', '')}）\n\n"
-            f"练习记录与参考批改已保存至历史记录。")
+            f"（{sc.get('scheme_name', '')}）",
+            informative="练习记录与参考批改已保存至历史记录。",
+            icon=ICON_OK)
 
     def _perform_evaluation(self, vosk_model):
         self.session.evaluation = evaluate_recordings(self.session, self.pkg, vosk_model)

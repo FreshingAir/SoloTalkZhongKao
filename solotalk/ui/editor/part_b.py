@@ -7,6 +7,9 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 
+from ..theme import SUB, bind_font
+from .widgets import audio_picker, file_name, source_select
+
 
 class PartBEditor(QWidget):
     """Part B 容器，仅组合两个 Section 编辑器。"""
@@ -17,7 +20,8 @@ class PartBEditor(QWidget):
         self.setup_ui()
 
     def setup_ui(self):
-        main_layout = QVBoxLayout()
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(4, 10, 4, 4)
         tabs = QTabWidget()
         self.secA_widget = PartBSecAEditor(self.pkg)
         self.secB_widget = PartBSecBEditor(self.pkg)
@@ -51,48 +55,59 @@ class PartBSecAEditor(QWidget):
         self.segment_audio_paths = [None, None, None]
         self.setup_ui()
 
-    def _make_audio_row(self):
-        label = QLabel("未选择音频")
-        label.setStyleSheet("color:#666;")
-        btn_choose = QPushButton("选择音频")
-        btn_clear = QPushButton("清除")
-        row = QHBoxLayout()
-        row.addWidget(label)
-        row.addWidget(btn_choose)
-        row.addWidget(btn_clear)
-        return row, label, btn_choose, btn_clear
-
     def setup_ui(self):
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+
         scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet("QScrollArea { background:transparent; border:none; }")
         widget = QWidget()
-        layout = QVBoxLayout()
-        self.segment_widgets = []
+        widget.setStyleSheet("background:transparent;")
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(4, 4, 4, 10)
+        layout.setSpacing(12)
+
         for seg_idx in range(3):
-            grp = QGroupBox(f"对话/独白 {seg_idx + 1}")
-            seg_layout = QVBoxLayout()
-            src_combo = QComboBox()
-            src_combo.addItems(["💻电脑 TTS", "上传音频"])
+            grp = QGroupBox(f"对话 / 独白 {seg_idx + 1}")
+            seg_layout = QVBoxLayout(grp)
+            seg_layout.setContentsMargins(14, 18, 14, 12)
+            seg_layout.setSpacing(9)
+
+            src_row = QHBoxLayout()
+            src_row.setSpacing(10)
+            src_lb = QLabel("音频来源")
+            bind_font(src_lb, 13)
+            src_lb.setStyleSheet(f"color:{SUB};")
+            src_row.addWidget(src_lb)
+            src_combo = source_select()
+            src_row.addWidget(src_combo)
+            src_row.addStretch(1)
+            seg_layout.addLayout(src_row)
+
             tts_edit = QTextEdit()
+            tts_edit.setMinimumHeight(96)
             tts_edit.setPlaceholderText(
                 "听力原文（TTS朗读）。双角色对话请每行一个角色：\n"
                 "W: 女声台词\n"
                 "M: 男声台词\n"
                 "标记只用于区分音色，不会被朗读。")
-            hbox = QHBoxLayout()
-            hbox.addWidget(QLabel("音频来源："))
-            hbox.addWidget(src_combo)
-            seg_layout.addLayout(hbox)
             seg_layout.addWidget(tts_edit)
 
-            a_row, a_label, a_btn, a_clear = self._make_audio_row()
-            a_btn.clicked.connect(lambda _, i=seg_idx, lb=a_label: self._choose_audio(i, lb))
-            a_clear.clicked.connect(lambda _, i=seg_idx, lb=a_label: self._clear_audio(i, lb))
-            seg_layout.addLayout(a_row)
+            a_row, a_label, a_choose, a_clear = audio_picker()
+            a_choose.clicked.connect(
+                lambda _=False, i=seg_idx: self._choose_audio(i))
+            a_clear.clicked.connect(
+                lambda _=False, i=seg_idx: self._clear_audio(i))
+            seg_layout.addWidget(a_row)
 
             q_widgets = []
             for q_idx in range(2):
-                q_grp = QGroupBox(f"问题{q_idx + 1}")
-                q_layout = QFormLayout()
+                q_grp = QGroupBox(f"问题 {q_idx + 1}")
+                q_layout = QFormLayout(q_grp)
+                q_layout.setContentsMargins(14, 16, 14, 10)
+                q_layout.setSpacing(8)
                 q_edit = QLineEdit(); q_edit.setPlaceholderText("英文问题")
                 optA = QLineEdit(); optA.setPlaceholderText("A. ...")
                 optB = QLineEdit(); optB.setPlaceholderText("B. ...")
@@ -103,38 +118,36 @@ class PartBSecAEditor(QWidget):
                 q_layout.addRow("选项B：", optB)
                 q_layout.addRow("选项C：", optC)
                 q_layout.addRow("正确答案：", correct_edit)
-                q_grp.setLayout(q_layout)
                 seg_layout.addWidget(q_grp)
                 q_widgets.append({"q_edit": q_edit, "optA": optA, "optB": optB,
                                   "optC": optC, "correct_edit": correct_edit})
-            grp.setLayout(seg_layout)
             layout.addWidget(grp)
             self.segment_widgets.append({
                 "src_combo": src_combo, "tts_edit": tts_edit,
-                "audio_lbl": a_label, "q_widgets": q_widgets,
+                "audio_row": a_row, "audio_lbl": a_label, "q_widgets": q_widgets,
             })
-        widget.setLayout(layout)
-        scroll.setWidget(widget)
-        main_layout = QVBoxLayout()
-        main_layout.addWidget(scroll)
-        self.setLayout(main_layout)
 
-    def _choose_audio(self, seg_idx, label):
+        layout.addStretch(1)
+        scroll.setWidget(widget)
+        outer.addWidget(scroll)
+        self.setLayout(outer)
+
+    def _choose_audio(self, seg_idx):
         path, _ = QFileDialog.getOpenFileName(self, f"选择对话{seg_idx + 1}音频", "",
                                               "音频文件 (*.wav *.mp3 *.ogg *.m4a)")
         if path:
             self.segment_audio_paths[seg_idx] = path
-            label.setText(os.path.basename(path))
+            self.segment_widgets[seg_idx]["audio_lbl"].setText(os.path.basename(path))
 
-    def _clear_audio(self, seg_idx, label):
+    def _clear_audio(self, seg_idx):
         self.segment_audio_paths[seg_idx] = None
-        label.setText("未选择音频")
+        self.segment_widgets[seg_idx]["audio_lbl"].setText("未选择音频")
 
     def save_to_pkg(self):
         self.pkg.partB_secA = []
         for seg_idx, w in enumerate(self.segment_widgets):
             seg = {
-                "audio_source_type": "tts" if w["src_combo"].currentIndex() == 0 else "audio",
+                "audio_source_type": w["src_combo"].currentData() or "tts",
                 "tts_text": w["tts_edit"].toPlainText(),
                 "audio_path": self.segment_audio_paths[seg_idx],
                 "questions": [],
@@ -158,8 +171,7 @@ class PartBSecAEditor(QWidget):
             seg = self.pkg.partB_secA[seg_idx]
             self.segment_audio_paths[seg_idx] = seg.get("audio_path")
             w["src_combo"].setCurrentIndex(1 if seg.get("audio_source_type") == "audio" else 0)
-            w["audio_lbl"].setText(os.path.basename(seg["audio_path"])
-                                   if seg.get("audio_path") else "未选择音频")
+            w["audio_lbl"].setText(file_name(seg.get("audio_path")))
             w["tts_edit"].setPlainText(seg.get("tts_text", ""))
             for q_idx, qw in enumerate(w["q_widgets"]):
                 if q_idx < len(seg.get("questions", [])):
@@ -186,33 +198,63 @@ class PartBSecBEditor(QWidget):
         self.setup_ui()
 
     def setup_ui(self):
-        layout = QFormLayout()
-        self.src_combo = QComboBox()
-        self.src_combo.addItems(["💻电脑 TTS", "上传音频"])
-        layout.addRow("独白音频来源：", self.src_combo)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet("QScrollArea { background:transparent; border:none; }")
+        widget = QWidget()
+        widget.setStyleSheet("background:transparent;")
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(4, 4, 4, 10)
+        layout.setSpacing(12)
+
+        audio_group = QGroupBox("独白音频")
+        av = QVBoxLayout(audio_group)
+        av.setContentsMargins(14, 18, 14, 12)
+        av.setSpacing(9)
+
+        src_row = QHBoxLayout()
+        src_row.setSpacing(10)
+        src_lb = QLabel("音频来源")
+        bind_font(src_lb, 13)
+        src_lb.setStyleSheet(f"color:{SUB};")
+        src_row.addWidget(src_lb)
+        self.src_combo = source_select()
+        src_row.addWidget(self.src_combo)
+        src_row.addStretch(1)
+        av.addLayout(src_row)
+
         self.tts_edit = QTextEdit()
+        self.tts_edit.setMinimumHeight(110)
         self.tts_edit.setPlaceholderText("独白文本（TTS朗读）")
-        layout.addRow("独白文本：", self.tts_edit)
-        self.audio_lbl = QLabel("未选择音频")
-        self.audio_btn = QPushButton("选择音频")
-        self.audio_btn.clicked.connect(self.upload_audio)
-        hbox = QHBoxLayout()
-        hbox.addWidget(self.audio_lbl)
-        hbox.addWidget(self.audio_btn)
-        layout.addRow("音频文件：", hbox)
+        av.addWidget(self.tts_edit)
+
+        self.audio_row, self.audio_lbl, btn_choose, btn_clear = audio_picker()
+        btn_choose.clicked.connect(self.upload_audio)
+        btn_clear.clicked.connect(self.clear_audio)
+        av.addWidget(self.audio_row)
+        layout.addWidget(audio_group)
 
         self.q_widgets = []
         for i in range(4):
-            grp = QGroupBox(f"问题{i + 1}")
-            inner = QFormLayout()
+            grp = QGroupBox(f"问题 {i + 1}")
+            inner = QFormLayout(grp)
+            inner.setContentsMargins(14, 16, 14, 10)
+            inner.setSpacing(8)
             q_edit = QLineEdit(); q_edit.setPlaceholderText("英文问题")
             hid_edit = QLineEdit(); hid_edit.setPlaceholderText("标准答案（隐藏）")
             inner.addRow("问题：", q_edit)
             inner.addRow("答案：", hid_edit)
-            grp.setLayout(inner)
-            layout.addRow(grp)
+            layout.addWidget(grp)
             self.q_widgets.append((q_edit, hid_edit))
-        self.setLayout(layout)
+
+        layout.addStretch(1)
+        scroll.setWidget(widget)
+        outer.addWidget(scroll)
+        self.setLayout(outer)
 
     def upload_audio(self):
         path, _ = QFileDialog.getOpenFileName(self, "选择独白音频", "",
@@ -221,8 +263,12 @@ class PartBSecBEditor(QWidget):
             self._audio_path = path
             self.audio_lbl.setText(os.path.basename(path))
 
+    def clear_audio(self):
+        self._audio_path = None
+        self.audio_lbl.setText("未选择音频")
+
     def save_to_pkg(self):
-        self.pkg.partB_secB["audio_source_type"] = "tts" if self.src_combo.currentIndex() == 0 else "audio"
+        self.pkg.partB_secB["audio_source_type"] = self.src_combo.currentData() or "tts"
         self.pkg.partB_secB["tts_text"] = self.tts_edit.toPlainText()
         self.pkg.partB_secB["audio_path"] = self._audio_path
         self.pkg.partB_secB["questions"] = []
@@ -236,7 +282,7 @@ class PartBSecBEditor(QWidget):
         secB = self.pkg.partB_secB
         self._audio_path = secB.get("audio_path")
         self.src_combo.setCurrentIndex(1 if secB.get("audio_source_type") == "audio" else 0)
-        self.audio_lbl.setText(os.path.basename(secB["audio_path"]) if secB.get("audio_path") else "未选择音频")
+        self.audio_lbl.setText(file_name(secB.get("audio_path")))
         self.tts_edit.setPlainText(secB.get("tts_text", ""))
         questions = secB.get("questions", [])
         for i, (q_edit, hid_edit) in enumerate(self.q_widgets):

@@ -1,0 +1,12 @@
+# SoloTalk 中考版 — 运行期依赖（目标 Python 3.13）
+# 安装：python -m pip install -r requirements.txt
+# 打包工具（nuitka / pyinstaller 及其辅助包）不在此处，由各构建任务单独安装。
+
+PyQt5
+pyttsx3
+sounddevice
+vosk
+pygame
+numpy
+scipy
+edge-tts>=7.3.1

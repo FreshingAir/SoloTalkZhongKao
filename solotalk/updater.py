@@ -11,11 +11,11 @@ from PyQt5.QtCore import QThread, pyqtSignal
 from .config import APP_VERSION
 
 UPDATE_INFO_URLS = [
-    "https://api.github.com/repos/FallingLighty/SoloTalk/contents/version.json?ref=main",
-    "https://cdn.jsdelivr.net/gh/FallingLighty/SoloTalk@main/version.json",
-    "https://raw.githubusercontent.com/FallingLighty/SoloTalk/main/version.json",
+    "https://api.github.com/repos/FreshingAir/SoloTalkZhongKao/contents/version.json?ref=main",
+    "https://cdn.jsdelivr.net/gh/FreshingAir/SoloTalkZhongKao@master/version.json",
+    "https://raw.githubusercontent.com/FreshingAir/SoloTalkZhongKao/master/version.json",
 ]
-CHANNEL = "mobile" if hasattr(sys, "getandroidapilevel") else "desktop"
+CHANNEL = "desktop"
 
 
 class UpdateChecker(QThread):

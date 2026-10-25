@@ -27,7 +27,7 @@ class RecordingMixin:
         self._stream = sd.InputStream(samplerate=SAMPLE_RATE, channels=1,
                                       dtype='int16', callback=callback)
         self._stream.start()
-        self.sub_label.setText(self.sub_label.text() + "\n🔴 录音中...")
+        self.sub_label.setText(self.sub_label.text() + "\n（录音中...）")
 
     def _stop_recording(self):
         self._is_recording = False

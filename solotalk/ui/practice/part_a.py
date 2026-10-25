@@ -9,7 +9,7 @@ class PartAMixin:
         self._exec_partA_step()
 
     def _partA_reading_text(self):
-        """Part A 准备/朗读阶段要展示的原文。
+        """Part A 听短文/准备/朗读阶段要展示的原文。
 
         优先用编辑器里的“原文(隐藏)”，没有填写时退回电脑朗读用的短文文本；
         两者都为空则返回空串（界面只显示提示语）。
@@ -30,7 +30,8 @@ class PartAMixin:
                             self.signal_tts_next)
             self._set_tts_callback(self._next_partA_step)
         elif idx == 1:
-            self.signal_update_display.emit("请认真听短文，注意语音语调。", "")
+            # 听短文阶段同步展示原文，便于边听边对照
+            self.signal_update_display.emit("请认真听短文，注意语音语调。", self._partA_reading_text())
             self._play_audio_by_source(
                 self.pkg.partA_audio_source_type,
                 self.pkg.partA_tts_text,

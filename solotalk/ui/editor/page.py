@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""编辑模式主页面：工具栏（名称/作者/分制/新建/打开/保存）+ 三个 Part 页签。"""
+"""编辑模式主页面：顶部信息卡（名称/作者/分制/操作）+ 三个 Part 页签。"""
 
 import os
 import json
@@ -12,6 +12,8 @@ from PyQt5.QtGui import *
 
 from ...config import DEFAULT_SCHEME, SCORE_SCHEMES
 from ...models import SoloPackage
+from ..theme import (ACCENT_DEEP, BG_BOT, BG_TOP, BD, FluentSelect, ICON_EDITOR,
+                     ICON_OK, ICON_WARN, SUB, TEXT, bind_font, notify, svg_pixmap)
 from .part_a import PartAEditor
 from .part_b import PartBEditor
 from .part_c import PartCEditor
@@ -25,47 +27,81 @@ class EditorPage(QWidget):
         self.setup_ui()
 
     def setup_ui(self):
-        layout = QVBoxLayout()
-        top_bar = QHBoxLayout()
+        self.setObjectName("editorRoot")
+        self.setStyleSheet(
+            f"#editorRoot {{ background:qlineargradient(x1:0,y1:0,x2:0,y2:1,"
+            f" stop:0 {BG_TOP}, stop:1 {BG_BOT}); }}")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 20, 24, 18)
+        layout.setSpacing(12)
+
+        # ---------- 顶部信息卡 ----------
+        bar = QFrame()
+        bar.setObjectName("editorBar")
+        bar.setStyleSheet(
+            f"#editorBar {{ background:#FFFFFF; border:1px solid {BD}; border-radius:14px; }}")
+        outer = QVBoxLayout(bar)
+        outer.setContentsMargins(18, 14, 18, 14)
+        outer.setSpacing(10)
+
+        title_row = QHBoxLayout()
+        title_row.setSpacing(10)
+        ic = QLabel()
+        ic.setFixedSize(34, 34)
+        ic.setAlignment(Qt.AlignCenter)
+        ic.setPixmap(svg_pixmap(ICON_EDITOR, ACCENT_DEEP, 24))
+        ic.setStyleSheet("background:#E8F6FF; border-radius:17px;")
+        title_row.addWidget(ic)
+        t = QLabel("编辑模式")
+        bind_font(t, 16, medium=True)
+        t.setStyleSheet(f"color:{TEXT};")
+        title_row.addWidget(t)
+        title_row.addStretch(1)
+        btn_new = self._btn("新建", self.new_package)
+        btn_open = self._btn("打开 .solo", self.open_package)
+        btn_save = self._primary("保存", self.save_package)
+        btn_back = self._btn("返回主页", lambda: self.main.go_to(self.main.home_page))
+        title_row.addWidget(btn_new)
+        title_row.addWidget(btn_open)
+        title_row.addWidget(btn_save)
+        title_row.addWidget(btn_back)
+        outer.addLayout(title_row)
+
+        fields = QHBoxLayout()
+        fields.setSpacing(10)
         self.name_edit = QLineEdit(self.pkg.meta.get("name", ""))
         self.name_edit.setPlaceholderText("题目包名称")
+        self.name_edit.setMinimumWidth(180)
         self.author_edit = QLineEdit(self.pkg.meta.get("author", ""))
         self.author_edit.setPlaceholderText("题目作者（可选）")
+        self.author_edit.setMinimumWidth(150)
         self.anonymous_check = QCheckBox("匿名")
         self.anonymous_check.setChecked(self.pkg.meta.get("anonymous", False))
 
-        # 分制选择（随包保存）
-        self.scheme_combo = QComboBox()
+        self.scheme_combo = FluentSelect(min_width=150)
         for key, sc in SCORE_SCHEMES.items():
             self.scheme_combo.addItem(sc["name"], key)
         _cur = str(self.pkg.meta.get("scheme", DEFAULT_SCHEME))
-        _idx = self.scheme_combo.findData(_cur)
-        if _idx >= 0:
-            self.scheme_combo.setCurrentIndex(_idx)
-        self.scheme_combo.setMinimumWidth(180)
+        for i, (key, _sc) in enumerate(SCORE_SCHEMES.items()):
+            if key == _cur:
+                self.scheme_combo.setCurrentIndex(i)
+                break
 
-        btn_new = QPushButton("新建")
-        btn_open = QPushButton("打开 .solo")
-        btn_save = QPushButton("保存")
-        btn_back = QPushButton("返回主页")
-        top_bar.addWidget(QLabel("名称："))
-        top_bar.addWidget(self.name_edit)
-        top_bar.addWidget(QLabel("作者："))
-        top_bar.addWidget(self.author_edit)
-        top_bar.addWidget(self.anonymous_check)
-        top_bar.addWidget(QLabel("评分分制："))
-        top_bar.addWidget(self.scheme_combo)
-        top_bar.addWidget(btn_new)
-        top_bar.addWidget(btn_open)
-        top_bar.addWidget(btn_save)
-        top_bar.addStretch()
-        top_bar.addWidget(btn_back)
-        btn_new.clicked.connect(self.new_package)
-        btn_open.clicked.connect(self.open_package)
-        btn_save.clicked.connect(self.save_package)
-        btn_back.clicked.connect(lambda: self.main.go_to(self.main.home_page))
-        layout.addLayout(top_bar)
+        for text, widget in (("名称", self.name_edit), ("作者", self.author_edit),
+                             ("评分分制", self.scheme_combo)):
+            lb = QLabel(text)
+            bind_font(lb, 13)
+            lb.setStyleSheet(f"color:{SUB};")
+            fields.addWidget(lb)
+            fields.addWidget(widget, 1 if widget is not self.scheme_combo else 0)
+            if widget is self.author_edit:
+                fields.addWidget(self.anonymous_check)
+        fields.addStretch(1)
+        outer.addLayout(fields)
+        layout.addWidget(bar)
 
+        # ---------- 页签 ----------
         self.tabs = QTabWidget()
         self.partA_widget = PartAEditor(self.pkg)
         self.partB_widget = PartBEditor(self.pkg)
@@ -73,8 +109,31 @@ class EditorPage(QWidget):
         self.tabs.addTab(self.partA_widget, "Part A 模仿朗读")
         self.tabs.addTab(self.partB_widget, "Part B 信息获取")
         self.tabs.addTab(self.partC_widget, "Part C 信息转述及询问")
-        layout.addWidget(self.tabs)
-        self.setLayout(layout)
+        layout.addWidget(self.tabs, 1)
+
+    def _btn(self, text, slot):
+        b = QPushButton(text)
+        b.setCursor(Qt.PointingHandCursor)
+        b.setFixedHeight(34)
+        bind_font(b, 13)
+        b.setStyleSheet(
+            f"QPushButton {{ background:#FFFFFF; border:1px solid {BD};"
+            f" border-radius:8px; padding:0 16px; color:{SUB}; }}"
+            f"QPushButton:hover {{ background:#F4F9FD; color:{TEXT}; }}")
+        b.clicked.connect(slot)
+        return b
+
+    def _primary(self, text, slot):
+        b = QPushButton(text)
+        b.setCursor(Qt.PointingHandCursor)
+        b.setFixedHeight(34)
+        bind_font(b, 13, medium=True)
+        b.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT_DEEP}; border:none; border-radius:8px;"
+            f" padding:0 18px; color:#FFFFFF; font-weight:bold; }}"
+            f"QPushButton:hover {{ background:#66CCFF; }}")
+        b.clicked.connect(slot)
+        return b
 
     def new_package(self):
         self.main.current_package = SoloPackage()
@@ -106,9 +165,10 @@ class EditorPage(QWidget):
                 self.author_edit.setText(self.pkg.meta.get("author", ""))
                 self.anonymous_check.setChecked(self.pkg.meta.get("anonymous", False))
                 _s = str(self.pkg.meta.get("scheme", DEFAULT_SCHEME))
-                _i = self.scheme_combo.findData(_s)
-                if _i >= 0:
-                    self.scheme_combo.setCurrentIndex(_i)
+                for i, key in enumerate(SCORE_SCHEMES.keys()):
+                    if key == _s:
+                        self.scheme_combo.setCurrentIndex(i)
+                        break
                 # 保证所有子编辑器都指向同一个（已载入数据的）题目包对象
                 self.partA_widget.pkg = self.pkg
                 self.partB_widget.set_package(self.pkg)
@@ -117,7 +177,7 @@ class EditorPage(QWidget):
                 self.partB_widget.refresh()
                 self.partC_widget.refresh()
             except Exception as e:
-                QMessageBox.critical(self, "错误", f"打开失败：{str(e)}")
+                notify(self, "打开失败", f"无法打开题目包：{e}", icon=ICON_WARN)
 
     def save_package(self):
         """把界面内容写回 pkg 并打包成 .solo（zip：data.json + 音频 + 思维导图）。"""
@@ -152,6 +212,6 @@ class EditorPage(QWidget):
                 mm = self.pkg.partC_secA.get("mindmap_image")
                 if mm and os.path.exists(mm):
                     zf.write(mm, os.path.basename(mm))
-            QMessageBox.information(self, "成功", f"题目包已保存至 {path}")
+            notify(self, "保存成功", f"题目包已保存至：{path}", icon=ICON_OK)
         except Exception as e:
-            QMessageBox.critical(self, "保存失败", str(e))
+            notify(self, "保存失败", str(e), icon=ICON_WARN)

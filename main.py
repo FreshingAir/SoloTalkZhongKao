@@ -28,6 +28,7 @@ from PyQt5.QtGui import QIcon
 from solotalk.config import APP_VERSION, MODEL_PATH, SCORE_SCHEMES
 from solotalk.paths import resolve_resource_file
 from solotalk.tts import EDGE_TTS_AVAILABLE
+from solotalk.ui import theme
 from solotalk.ui.main_window import MainWindow
 
 # 兼容旧代码/脚本从 main 直接引用这些名字
@@ -35,13 +36,7 @@ from solotalk.models import PracticeSession, SoloPackage  # noqa: F401
 from solotalk.scoring import compute_scores  # noqa: F401
 from solotalk.evaluation import evaluate_recordings  # noqa: F401
 
-STYLE_SHEET = """
-    QMainWindow { background: #f5f6fa; }
-    QLabel { color: #2c3e50; }
-    QPushButton { font-size:16px; padding:10px 20px; border-radius:6px; background:#ecf0f1; border:1px solid #bdc3c7; }
-    QPushButton:hover { background:#dcdde1; }
-    QTextEdit, QLineEdit { border:1px solid #bdc3c7; border-radius:4px; padding:6px; }
-"""
+STYLE_SHEET = theme.APP_STYLE_SHEET
 
 
 def print_startup_banner():
@@ -62,8 +57,11 @@ def main():
     if _app_icon:
         app.setWindowIcon(QIcon(_app_icon))
     app.setStyle("Fusion")
+    theme.load_app_fonts()
+    app.setFont(theme.ui_font(12))
     app.setStyleSheet(STYLE_SHEET)
     window = MainWindow()  # noqa: F841  (持有引用，防止被回收)
+    theme.install_smooth_scroll()
     return app.exec_()
 
 

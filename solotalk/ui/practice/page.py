@@ -18,6 +18,9 @@ from PyQt5.QtGui import *
 from ...config import DEFAULT_SCHEME, get_scheme
 from ...models import PracticeSession
 from ...win_key_blocker import WindowsKeyBlocker
+from ..theme import (ACCENT, ACCENT_DEEP, ACCENT_SOFT, BG_BOT, BG_TOP, BD, CARD,
+                     ICON_MIC, MUTED, SUB, TEXT, ask, bind_font,
+                     secondary_button, svg_pixmap)
 from .audio import AudioMixin
 from .evaluation_flow import EvaluationMixin
 from .part_a import PartAMixin
@@ -89,59 +92,136 @@ class PracticePage(PartAMixin, PartBMixin, PartCMixin,
         self.signal_finished.connect(self._on_exam_finished)
 
     def setup_ui(self):
-        layout = QVBoxLayout()
+        self.setObjectName("practiceRoot")
+        self.setStyleSheet(
+            f"#practiceRoot {{ background:qlineargradient(x1:0,y1:0,x2:0,y2:1,"
+            f" stop:0 {BG_TOP}, stop:1 {BG_BOT}); }}")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(26, 20, 26, 18)
+        layout.setSpacing(12)
+
+        # ---------- 顶部：模式徽标 + 分制 + 返回 ----------
+        top = QHBoxLayout()
+        top.setSpacing(8)
+
+        ic = QLabel()
+        ic.setFixedSize(34, 34)
+        ic.setAlignment(Qt.AlignCenter)
+        ic.setPixmap(svg_pixmap(ICON_MIC, ACCENT_DEEP, 22))
+        ic.setStyleSheet(f"background:{ACCENT_SOFT}; border-radius:17px;")
+        top.addWidget(ic)
+
+        self.mode_label = QLabel("练习模式")
+        bind_font(self.mode_label, 16, medium=True)
+        self.mode_label.setStyleSheet(f"color:{TEXT};")
+        top.addWidget(self.mode_label)
+
+        self.scheme_label = QLabel("30分制")
+        bind_font(self.scheme_label, 12)
+        self.scheme_label.setStyleSheet(
+            "#schemeChip{background:#F2F8FD;border:1px solid #DCE9F3;border-radius:9px;"
+            "color:#283593;padding:4px 10px;}")
+        self.scheme_label.setObjectName("schemeChip")
+        top.addWidget(self.scheme_label)
+        top.addStretch(1)
+        btn_back = secondary_button("返回主页", self._request_back, height=34)
+        top.addWidget(btn_back)
+        layout.addLayout(top)
+
+        # ---------- 主展示卡 ----------
+        card = QFrame()
+        card.setObjectName("practiceCard")
+        card.setStyleSheet(
+            f"#practiceCard {{ background:{CARD}; border:1px solid {BD};"
+            f" border-radius:16px; }}")
+        cv = QVBoxLayout(card)
+        cv.setContentsMargins(24, 18, 24, 20)
+        cv.setSpacing(10)
+
         self.main_label = QLabel("准备开始练习")
         self.main_label.setAlignment(Qt.AlignCenter)
-        self.main_label.setStyleSheet("font-size:28px; font-weight:bold;")
+        self.main_label.setWordWrap(True)
+        bind_font(self.main_label, 24, medium=True)
+        self.main_label.setStyleSheet(f"color:{TEXT}; background:transparent;")
+
         self.sub_label = QLabel("")
         self.sub_label.setAlignment(Qt.AlignCenter)
-        self.sub_label.setStyleSheet("font-size:18px; color:gray;")
+        self.sub_label.setWordWrap(True)
+        bind_font(self.sub_label, 14)
+        self.sub_label.setStyleSheet(f"color:{SUB}; background:transparent;")
+
         self.countdown_label = QLabel("")
         self.countdown_label.setAlignment(Qt.AlignCenter)
-        self.countdown_label.setStyleSheet("font-size:20px; color:#e74c3c; font-weight:bold;")
+        bind_font(self.countdown_label, 30, bold=True)
+        self.countdown_label.setStyleSheet(
+            "color:#C0392B; background:transparent;")
         self.countdown_label.hide()
+
         self.text_display = QTextEdit()
         self.text_display.setReadOnly(True)
-        self.text_display.setStyleSheet("font-size:18px;")
-        self.text_display.setMaximumHeight(260)
+        self.text_display.setMinimumHeight(180)
+        self.text_display.setPlaceholderText("选择题目包后，点击下方「开始练习」进入试音与正式流程。")
+        bind_font(self.text_display, 16)
+        self.text_display.setStyleSheet(
+            "QTextEdit { background:#FBFDFF; border:1px solid #E8F1F8;"
+            " border-radius:12px; padding:12px 14px; color:#22313F; }")
 
         self.mindmap_label = QLabel()
         self.mindmap_label.setAlignment(Qt.AlignCenter)
         self.mindmap_label.setMinimumHeight(220)
-        self.mindmap_label.setStyleSheet("background:#fdfdfd; border:1px solid #e0e0e0;")
+        self.mindmap_label.setStyleSheet(
+            "background:#FBFDFF; border:1px solid #E8F1F8; border-radius:12px;")
         self.mindmap_label.hide()
 
-        layout.addWidget(self.main_label)
-        layout.addWidget(self.sub_label)
-        layout.addWidget(self.countdown_label)
-        layout.addWidget(self.text_display)
-        layout.addWidget(self.mindmap_label, 1)
+        cv.addWidget(self.main_label)
+        cv.addWidget(self.sub_label)
+        cv.addWidget(self.countdown_label)
+        cv.addWidget(self.text_display, 1)
+        cv.addWidget(self.mindmap_label, 1)
+        layout.addWidget(card, 1)
 
+        # ---------- 底部按钮 ----------
         btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(10)
         self.start_btn = QPushButton("开始练习")
+        self.start_btn.setCursor(Qt.PointingHandCursor)
+        self.start_btn.setFixedHeight(42)
+        self.start_btn.setMinimumWidth(150)
+        bind_font(self.start_btn, 14, medium=True)
+        self.start_btn.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT_DEEP}; border:none; border-radius:10px;"
+            f" padding:0 26px; color:#FFFFFF; font-weight:bold; }}"
+            f"QPushButton:hover {{ background:{ACCENT}; }}"
+            f"QPushButton:disabled {{ background:{MUTED}; }}")
         self.start_btn.clicked.connect(self.start_exam)
-        self.skip_btn = QPushButton("⏭  跳过")
-        self.skip_btn.setStyleSheet(
-            "QPushButton { background:#f39c12; color:white; border:1px solid #e67e22; font-weight:bold; }"
-            "QPushButton:disabled { background:#bdc3c7; color:#ecf0f1; }"
-        )
+
+        self.skip_btn = QPushButton("跳过")
+        self.skip_btn.setCursor(Qt.PointingHandCursor)
+        self.skip_btn.setFixedHeight(42)
+        bind_font(self.skip_btn, 13, medium=True)
         self.skip_btn.setEnabled(False)
         self.skip_btn.clicked.connect(self._skip_current)
-        self.prev_btn = QPushButton("⏮  上一步")
-        self.prev_btn.setStyleSheet(
-            "QPushButton { background:#3498db; color:white; border:1px solid #2980b9; font-weight:bold; }"
-            "QPushButton:disabled { background:#bdc3c7; color:#ecf0f1; }"
-        )
+
+        self.prev_btn = QPushButton("上一步")
+        self.prev_btn.setCursor(Qt.PointingHandCursor)
+        self.prev_btn.setFixedHeight(42)
+        bind_font(self.prev_btn, 13)
         self.prev_btn.setEnabled(False)
         self.prev_btn.clicked.connect(self._prev_current)
-        btn_back = QPushButton("返回主页")
-        btn_back.clicked.connect(self._request_back)
+        self.prev_btn.setStyleSheet(
+            f"QPushButton {{ background:#FFFFFF; border:1px solid {BD};"
+            f" border-radius:10px; padding:0 20px; color:{SUB}; }}"
+            f"QPushButton:hover {{ background:#F4F9FD; color:{TEXT}; }}"
+            f"QPushButton:disabled {{ color:{MUTED}; background:#F5F8FA; }}")
+
         btn_layout.addWidget(self.start_btn)
         btn_layout.addWidget(self.prev_btn)
         btn_layout.addWidget(self.skip_btn)
-        btn_layout.addWidget(btn_back)
+        btn_layout.addStretch(1)
         layout.addLayout(btn_layout)
         self.setLayout(layout)
+        self._update_skip_label()
 
     # ---------- 思维导图 ----------
     def _show_mindmap(self):
@@ -149,16 +229,19 @@ class PracticePage(PartAMixin, PartBMixin, PartCMixin,
               if self.pkg and self.pkg.partC_secA else None)
         if not mm or not os.path.isfile(mm):
             self.mindmap_label.hide()
+            self.text_display.show()
             self._mindmap_pixmap = None
             return
         pix = QPixmap(mm)
         if pix.isNull():
             self.mindmap_label.hide()
+            self.text_display.show()
             self._mindmap_pixmap = None
             return
         self._mindmap_pixmap = pix
         self._rescale_mindmap()
         self.mindmap_label.show()
+        self.text_display.show()
 
     def _hide_mindmap(self):
         self.mindmap_label.hide()
@@ -181,11 +264,10 @@ class PracticePage(PartAMixin, PartBMixin, PartCMixin,
             self.main.go_to(self.main.home_page)
 
     def _confirm_abort(self):
-        reply = QMessageBox.warning(
+        return ask(
             self, "确认退出",
-            "中途退出将保存当前进度与已录制音频，下次可从本次位置继续。\n确定要退出吗？",
-            QMessageBox.Yes | QMessageBox.No)
-        return reply == QMessageBox.Yes
+            "中途退出将保存当前进度与已录制音频，下次可从本次位置继续。",
+            informative="确定要退出吗？", ok_text="退出", cancel_text="继续练习")
 
     def request_exit(self):
         if self._exam_active:
@@ -228,6 +310,7 @@ class PracticePage(PartAMixin, PartBMixin, PartCMixin,
         self.countdown_label.hide()
         self._stop_video()
         self._hide_mindmap()
+        self.text_display.show()
         self.main_label.setText("准备开始" + ("模考" if self.mode == "exam" else "练习"))
         self.sub_label.setText("")
         self.text_display.clear()
@@ -277,17 +360,17 @@ class PracticePage(PartAMixin, PartBMixin, PartCMixin,
         if self.mode == "exam":
             return
         if self._is_recording:
-            self.skip_btn.setText("⏹  结束录音")
+            self.skip_btn.setText("结束录音")
             self.skip_btn.setStyleSheet(
-                "QPushButton { background:#e74c3c; color:white; border:1px solid #c0392b; font-weight:bold; }"
-                "QPushButton:disabled { background:#bdc3c7; color:#ecf0f1; }"
-            )
+                "QPushButton { background:#C0392B; color:white; border:none;"
+                " border-radius:10px; padding:0 20px; font-weight:bold; }"
+                f"QPushButton:disabled {{ background:#DDE6EE; color:{MUTED}; }}")
         else:
-            self.skip_btn.setText("⏭  跳过")
+            self.skip_btn.setText("跳过")
             self.skip_btn.setStyleSheet(
-                "QPushButton { background:#f39c12; color:white; border:1px solid #e67e22; font-weight:bold; }"
-                "QPushButton:disabled { background:#bdc3c7; color:#ecf0f1; }"
-            )
+                "QPushButton { background:#F39C12; color:white; border:none;"
+                " border-radius:10px; padding:0 20px; font-weight:bold; }"
+                f"QPushButton:disabled {{ background:#DDE6EE; color:{MUTED}; }}")
 
     def _update_nav_buttons(self):
         if self.mode == "exam":
@@ -307,11 +390,21 @@ class PracticePage(PartAMixin, PartBMixin, PartCMixin,
     def set_mode(self, mode):
         self.mode = mode
         self.start_btn.setText("开始练习" if mode == "practice" else "开始模考")
+        self.mode_label.setText("练习模式" if mode == "practice" else "模考模式")
+        self.mode_label.setStyleSheet(
+            f"color:{TEXT if mode == 'practice' else '#8a6d1f'};")
+        try:
+            pkg = self.main.current_package
+            self.scheme_label.setText(
+                get_scheme(str(pkg.meta.get("scheme", DEFAULT_SCHEME)))["name"])
+        except Exception:
+            pass
         self._reset_page_state()
 
     def start_exam(self):
         self.pkg = self.main.current_package
         self.scheme_key = str(self.pkg.meta.get("scheme", DEFAULT_SCHEME))
+        self.scheme_label.setText(get_scheme(self.scheme_key)["name"])
         self.session = PracticeSession(self.pkg.meta.get("name", "练习"))
         self.start_btn.setEnabled(False)
         self._exam_active = True
@@ -353,20 +446,23 @@ class PracticePage(PartAMixin, PartBMixin, PartCMixin,
         test_path = self._save_recording("mic_test")
         if test_path and os.path.exists(test_path):
             self._play_file(test_path)
-            reply = QMessageBox.question(self, "麦克风测试", "录音回放中，麦克风是否正常？",
-                                         QMessageBox.Yes | QMessageBox.No)
+            reply = ask(
+                self, "麦克风测试", "录音回放中，麦克风是否正常？",
+                informative="选择「正常」将开始正式考试；「不正常」会重新试音。",
+                ok_text="正常", cancel_text="不正常")
             self._stop_video()
             try:
                 os.remove(test_path)
             except Exception:
                 pass
-            if reply == QMessageBox.Yes:
+            if reply:
                 self.signal_update_display.emit("准备开始", "即将开始" + ("模考" if self.mode == "exam" else "练习"))
                 self._set_timer(3, self._run_part_a)
             else:
                 self._mic_test()
         else:
-            QMessageBox.warning(self, "错误", "录音失败，请检查设备")
+            ask(self, "录音失败", "没有录到声音，请检查麦克风设备。",
+                ok_text="重新试音", cancel_text="关闭")
             self._mic_test()
 
     # ---------- 计时器 ----------
@@ -380,7 +476,7 @@ class PracticePage(PartAMixin, PartBMixin, PartCMixin,
         if self._teardown_done:
             return
         remaining = max(0, int(self._phase_end_time - time.time()))
-        self.countdown_label.setText(f"剩余时间：{remaining} 秒")
+        self.countdown_label.setText(f"剩余 {remaining} 秒")
         if time.time() >= self._phase_end_time:
             self.timer.stop()
             self.countdown_label.hide()
@@ -403,8 +499,9 @@ class PracticePage(PartAMixin, PartBMixin, PartCMixin,
     @pyqtSlot(str, str)
     def _update_display(self, main, sub):
         self.main_label.setText(main)
-        self.sub_label.setText(sub)
-        self.text_display.setPlainText(sub if sub else main)
+        # 题目内容只在下方的文本框中展示，避免与上方重复；sub_label 仅用于录音提示
+        self.sub_label.setText("")
+        self.text_display.setPlainText(sub)
 
     # ---------- 跳过 / 上一步（仅练习模式） ----------
     def _skip_current(self):
